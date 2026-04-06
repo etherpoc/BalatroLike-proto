@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2048 × バラトロライク</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Title Screen -->
+    <div id="screen-title" class="screen active">
+      <h1>20<span class="accent">48</span></h1>
+      <p class="subtitle">2048 × バラトロライク</p>
+      <button id="btn-start" class="btn">RUN 開始</button>
+    </div>
+
+    <!-- Blind Select Screen -->
+    <div id="screen-blind" class="screen">
+      <h2>BLIND 選択</h2>
+      <div id="ante-display" class="ante-label"></div>
+      <div id="blind-cards" class="blind-cards"></div>
+    </div>
+
+    <!-- Puzzle Phase Screen -->
+    <div id="screen-puzzle" class="screen">
+      <div class="puzzle-layout">
+        <div class="top-area">
+          <div class="status-pane">
+            <div class="stat-row">
+              <div class="stat-block">
+                <div class="stat-label">TARGET</div>
+                <div id="ui-target" class="stat-value target-color">0</div>
+              </div>
+              <div class="stat-block">
+                <div class="stat-label">CURRENT</div>
+                <div id="ui-score" class="stat-value score-color">0</div>
+              </div>
+              <div class="stat-block small">
+                <div class="stat-label">MONEY</div>
+                <div id="ui-money" class="stat-value accent">$0</div>
+              </div>
+            </div>
+            <div id="boss-banner" class="boss-banner hidden"></div>
+            <div class="calc-combo-row">
+              <div id="calc-display" class="calc-display hidden">
+                <span class="calc-label">CHIPS</span>
+                <span id="calc-chips" class="calc-chips">0</span>
+                <span class="calc-x">&times;</span>
+                <span class="calc-label">MULT</span>
+                <span id="calc-mult" class="calc-mult">0</span>
+                <span class="calc-eq">=</span>
+                <span id="calc-result" class="calc-result">0</span>
+              </div>
+              <div id="combo-meter" class="combo-meter">
+                <div class="combo-label">COMBO</div>
+                <div id="combo-num" class="combo-num">0</div>
+                <div id="combo-freeze" class="combo-freeze hidden"></div>
+              </div>
+            </div>
+          </div>
+          <div class="right-info">
+            <div class="info-col">
+              <div class="stat-label">ARTIFACTS</div>
+              <div id="ui-artifacts" class="slot-list"></div>
+            </div>
+            <div class="info-col">
+              <div class="stat-label">ITEMS</div>
+              <div id="ui-items" class="slot-list"></div>
+            </div>
+          </div>
+        </div>
+        <div class="bottom-area">
+          <div class="board-wrapper">
+            <div id="board" class="board"></div>
+            <div id="target-overlay" class="target-overlay hidden">
+              <div id="target-msg" class="target-msg"></div>
+              <div class="target-hint">Esc でキャンセル</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Result Screen -->
+    <div id="screen-result" class="screen">
+      <div id="result-content"></div>
+    </div>
+
+    <!-- Shop Screen -->
+    <div id="screen-shop" class="screen">
+      <h2>SHOP</h2>
+      <div class="shop-money">所持金: <span id="shop-money">$0</span></div>
+      <div id="shop-items" class="shop-items"></div>
+      <button id="btn-next-round" class="btn">次のラウンドへ</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="screen-gameover" class="screen">
+      <h2 class="fail-text">GAME OVER</h2>
+      <p id="gameover-reason"></p>
+      <div id="gameover-stats" class="end-stats"></div>
+      <button id="btn-retry" class="btn">リトライ</button>
+    </div>
+
+    <!-- Win Screen -->
+    <div id="screen-win" class="screen">
+      <h2 class="accent">CONGRATULATIONS</h2>
+      <p>全ステージクリア！</p>
+      <div id="win-stats" class="end-stats"></div>
+      <button id="btn-win-retry" class="btn">もう一度遊ぶ</button>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
