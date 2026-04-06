@@ -43,6 +43,8 @@ body {
 #screen-title h1 { font-size: 60px; letter-spacing: 6px; }
 .accent { color: var(--accent); }
 .subtitle { color: var(--dim); font-size: 14px; margin-bottom: 16px; }
+.title-link { font-size: 11px; color: var(--dim); text-decoration: none; border: 1px solid var(--border); padding: 4px 12px; margin-top: 12px; letter-spacing: 1px; transition: all 0.12s; }
+.title-link:hover { color: var(--accent); border-color: var(--accent); }
 
 /* ---------- Buttons ---------- */
 .btn {

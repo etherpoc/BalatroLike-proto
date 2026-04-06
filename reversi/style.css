@@ -43,6 +43,8 @@ body {
 .accent { color: var(--neon); }
 .neon-green { color: var(--neon); }
 .subtitle { color: var(--dim); font-size: 13px; margin-bottom: 16px; }
+.title-link { font-size: 11px; color: var(--dim); text-decoration: none; border: 1px solid var(--border); padding: 4px 12px; margin-top: 12px; letter-spacing: 1px; transition: all 0.12s; }
+.title-link:hover { color: var(--neon); border-color: var(--neon); }
 
 /* Buttons */
 .btn {
