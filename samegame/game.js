@@ -579,6 +579,9 @@ function roundClearManual() {
   stopBGM();
   Sound.roundClear();
 
+  // Reset board for next round
+  S.board = emptyBoard();
+
   const interest = Math.min(Math.floor(S.money / 5), 5);
   let prismBonus = 0;
   if (hasArtifact('prismMining') && S.colorsUsed.size >= COLORS) prismBonus = 10;
@@ -600,6 +603,7 @@ function roundClearManual() {
 
 function overrunPenalty() {
   stopBGM(); Sound.gameOverSnd();
+  S.board = emptyBoard(); // Reset board
   const interest = Math.min(Math.floor(S.money / 5), 5);
   const total = S.reward + interest;
   S.money += total;
