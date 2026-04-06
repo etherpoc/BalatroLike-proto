@@ -2,6 +2,161 @@
 //  リバーシ × バラトロライク プロトタイプ v4
 // ============================================================
 
+// ============================================================
+//  SOUND SYSTEM (Web Audio API — no external files)
+// ============================================================
+const Sound = (() => {
+  let ctx = null;
+  let muted = false;
+
+  function ensure() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  /* helper: play a single oscillator burst */
+  function osc(type, freq, start, dur, vol = 0.15, detune = 0) {
+    const c = ensure();
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    if (detune) o.detune.value = detune;
+    g.gain.setValueAtTime(0, c.currentTime + start);
+    g.gain.linearRampToValueAtTime(vol, c.currentTime + start + 0.005);
+    g.gain.linearRampToValueAtTime(0, c.currentTime + start + dur);
+    o.connect(g).connect(c.destination);
+    o.start(c.currentTime + start);
+    o.stop(c.currentTime + start + dur + 0.02);
+  }
+
+  /* helper: noise burst for click / thud */
+  function noise(start, dur, vol = 0.08) {
+    const c = ensure();
+    const len = c.sampleRate * dur;
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, c.currentTime + start);
+    g.gain.linearRampToValueAtTime(0, c.currentTime + start + dur);
+    src.connect(g).connect(c.destination);
+    src.start(c.currentTime + start);
+    src.stop(c.currentTime + start + dur + 0.01);
+  }
+
+  /* ---- BGM drone state ---- */
+  let bgmOscs = [];
+
+  const api = {
+    get muted() { return muted; },
+    set muted(v) { muted = v; if (v) api.stopBGM(); },
+
+    place() {
+      if (muted) return;
+      osc('sine', 110, 0, 0.08, 0.18);
+      noise(0, 0.04, 0.06);
+    },
+
+    flip(count) {
+      if (muted) return;
+      for (let i = 0; i < Math.min(count, 8); i++)
+        osc('triangle', 600 + i * 80, i * 0.04, 0.05, 0.07);
+    },
+
+    score() {
+      if (muted) return;
+      osc('sine', 880, 0, 0.12, 0.13);
+      osc('sine', 1320, 0.04, 0.10, 0.09);
+    },
+
+    cornerBonus() {
+      if (muted) return;
+      osc('sine', 440, 0, 0.15, 0.16);
+      osc('sine', 660, 0.06, 0.14, 0.12);
+      osc('sine', 880, 0.12, 0.18, 0.10);
+    },
+
+    roundClear() {
+      if (muted) return;
+      const notes = [523, 659, 784, 1047];
+      notes.forEach((f, i) => osc('sine', f, i * 0.09, 0.18, 0.14));
+      osc('triangle', 1047, 0.36, 0.30, 0.08);
+    },
+
+    gameOver() {
+      if (muted) return;
+      const notes = [440, 370, 311, 261];
+      notes.forEach((f, i) => osc('sine', f, i * 0.18, 0.28, 0.12));
+    },
+
+    penalty() {
+      if (muted) return;
+      osc('sawtooth', 180, 0, 0.25, 0.10);
+      osc('sawtooth', 160, 0.05, 0.20, 0.08);
+      osc('square', 90, 0, 0.30, 0.05);
+    },
+
+    aiThink() {
+      if (muted) return;
+      osc('sine', 1200, 0, 0.03, 0.04);
+      noise(0, 0.02, 0.03);
+    },
+
+    shopBuy() {
+      if (muted) return;
+      osc('sine', 1200, 0, 0.04, 0.10);
+      osc('sine', 1600, 0.04, 0.04, 0.08);
+      noise(0.08, 0.06, 0.06);
+    },
+
+    uiClick() {
+      if (muted) return;
+      noise(0, 0.025, 0.05);
+      osc('sine', 800, 0, 0.03, 0.05);
+    },
+
+    /* ---- Ambient BGM: dark drone ---- */
+    startBGM() {
+      if (muted) return;
+      api.stopBGM();
+      const c = ensure();
+      const freqs = [55, 55.5, 82.5, 110];
+      freqs.forEach(f => {
+        const o = c.createOscillator();
+        const g = c.createGain();
+        o.type = 'sine';
+        o.frequency.value = f;
+        g.gain.value = 0.018;
+        o.connect(g).connect(c.destination);
+        o.start();
+        bgmOscs.push({ o, g });
+      });
+      // add a very quiet sawtooth layer
+      const o2 = c.createOscillator();
+      const g2 = c.createGain();
+      o2.type = 'sawtooth';
+      o2.frequency.value = 41.2;
+      g2.gain.value = 0.008;
+      o2.connect(g2).connect(c.destination);
+      o2.start();
+      bgmOscs.push({ o: o2, g: g2 });
+    },
+
+    stopBGM() {
+      bgmOscs.forEach(({ o, g }) => {
+        try { g.gain.linearRampToValueAtTime(0, (ctx ? ctx.currentTime : 0) + 0.3); } catch(e) {}
+        try { o.stop((ctx ? ctx.currentTime : 0) + 0.35); } catch(e) {}
+      });
+      bgmOscs = [];
+    },
+  };
+  return api;
+})();
+
 const SIZE = 8;
 const MAX_ANTE = 8;
 const MAX_ARTIFACTS = 5;
@@ -305,6 +460,7 @@ function flashCalc(chips, totalMult, total) {
   el.classList.remove('hidden', 'flash');
   void el.offsetWidth;
   el.classList.add('flash');
+  Sound.score();
 }
 
 function renderArtifacts() {
@@ -359,6 +515,11 @@ function handlePlayerMove(r, c) {
   S.board[r][c] = BLACK;
   for (const [fr, fc] of flips) S.board[fr][fc] = BLACK;
 
+  // Sound: place + flip + corner
+  Sound.place();
+  if (flips.length > 0) Sound.flip(flips.length);
+  if (isCorner(r, c)) Sound.cornerBonus();
+
   // Collector: +1 permanent chip per flip during overrun
   if (S.overrunning) {
     const collector = getArtifact('collector');
@@ -395,6 +556,7 @@ function startAITurn() {
   }
 
   setTurnBanner('ENEMY: THINKING...', 'enemy');
+  Sound.aiThink();
   renderBoard(null, null);
 
   const delay = 400 + Math.random() * 400;
@@ -445,6 +607,8 @@ function afterAITurn() {
 function roundClearManual() {
   if (!S.overrunning) return;
   S.inputLocked = true;
+  Sound.roundClear();
+  Sound.stopBGM();
 
   const surplus = S.score - S.scoreAtTarget;
   const interest = Math.min(Math.floor(S.money / 5), 5);
@@ -481,6 +645,8 @@ function roundClearManual() {
 
 function overrunPenalty() {
   // Penalty: surplus score and bonus money confiscated, forced to next round with bad board
+  Sound.penalty();
+  Sound.stopBGM();
   S.score = S.scoreAtTarget; // revert to target score
   S.inputLocked = true;
 
@@ -513,6 +679,8 @@ function advanceBlind() {
 }
 
 function gameOver(reason) {
+  Sound.gameOver();
+  Sound.stopBGM();
   showScreen('gameover');
   document.getElementById('gameover-reason').textContent = reason;
   document.getElementById('gameover-stats').innerHTML = `
@@ -522,6 +690,8 @@ function gameOver(reason) {
 }
 
 function showWin() {
+  Sound.stopBGM();
+  Sound.roundClear();
   showScreen('win');
   document.getElementById('win-stats').innerHTML = `
     <div>全 ${MAX_ANTE} ANTE クリア！</div>
@@ -625,7 +795,7 @@ function showBlindSelect() {
       <div class="b-target">${target.toLocaleString()}</div>
       <div class="b-reward">報酬: $${t.reward}</div>
       <div class="b-boss">ENEMY ${AI_NAMES[lv]}</div>`;
-    card.addEventListener('click', () => startPuzzle(i, target, t.reward, lv));
+    card.addEventListener('click', () => { Sound.uiClick(); startPuzzle(i, target, t.reward, lv); });
     container.appendChild(card);
   }
 }
@@ -650,6 +820,7 @@ function startPuzzle(blindIdx, target, reward, aiLevel) {
   if (!hasAnyStone) initBoard();
 
   showScreen('puzzle');
+  Sound.startBGM();
   setTurnBanner('YOUR TURN', 'player');
   document.getElementById('goal-banner').classList.add('hidden');
   renderBoard(null, null);
@@ -693,6 +864,7 @@ function showShop() {
     el.addEventListener('click', () => {
       if (el.classList.contains('sold')) return;
       if (S.money < def.price) return;
+      Sound.shopBuy();
       if (category === 'artifact') {
         if (S.artifacts.length >= MAX_ARTIFACTS) return;
         S.artifacts.push({ ...def, scalingValue: def.scalingValue || 0 });

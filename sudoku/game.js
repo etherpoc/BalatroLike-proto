@@ -2,6 +2,170 @@
 //  数独 × バラトロライク プロトタイプ
 // ============================================================
 
+// ============================================================
+//  SOUND SYSTEM (Web Audio API — programmatic, no files)
+// ============================================================
+let _audioCtx = null;
+let _muted = false;
+
+function getAudioCtx() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+
+const Sound = {
+  /* --- primitives ------------------------------------------------ */
+  _osc(freq, type, duration, vol = 0.18, detune = 0) {
+    if (_muted) return;
+    const ctx = getAudioCtx();
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    g.connect(ctx.destination);
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = freq;
+    o.detune.value = detune;
+    o.connect(g);
+    o.start(ctx.currentTime);
+    o.stop(ctx.currentTime + duration);
+  },
+
+  _noise(duration, vol = 0.06) {
+    if (_muted) return;
+    const ctx = getAudioCtx();
+    const len = ctx.sampleRate * duration;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'highpass';
+    filt.frequency.value = 3000;
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(ctx.destination);
+    src.start(); src.stop(ctx.currentTime + duration);
+  },
+
+  /* --- sound effects --------------------------------------------- */
+  place(num) {
+    const freq = num * 100 + 200;
+    Sound._osc(freq, 'triangle', 0.12, 0.2);
+    Sound._osc(freq * 2, 'sine', 0.06, 0.06);
+  },
+
+  select() {
+    Sound._osc(1200, 'sine', 0.04, 0.10);
+    Sound._osc(1800, 'sine', 0.03, 0.04);
+  },
+
+  lineClear() {
+    const base = 400;
+    [0, 80, 160, 240, 320].forEach((d, i) => {
+      setTimeout(() => Sound._osc(base + i * 80, 'sine', 0.14, 0.15), d * 0.5);
+    });
+  },
+
+  crossClear() {
+    const base = 500;
+    [0, 60, 120, 180, 240, 300, 360].forEach((d, i) => {
+      setTimeout(() => {
+        Sound._osc(base + i * 100, 'sine', 0.18, 0.18);
+        Sound._osc(base + i * 100 + 5, 'triangle', 0.14, 0.06);
+      }, d * 0.5);
+    });
+  },
+
+  score() {
+    Sound._osc(1400, 'sine', 0.08, 0.14);
+    setTimeout(() => Sound._osc(1800, 'sine', 0.06, 0.10), 40);
+  },
+
+  discard() {
+    Sound._noise(0.15, 0.08);
+    Sound._osc(300, 'sawtooth', 0.08, 0.05);
+    setTimeout(() => Sound._osc(200, 'sawtooth', 0.06, 0.03), 50);
+  },
+
+  roundClear() {
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((f, i) => {
+      setTimeout(() => {
+        Sound._osc(f, 'sine', 0.25, 0.16);
+        Sound._osc(f * 1.005, 'triangle', 0.20, 0.06);
+      }, i * 110);
+    });
+  },
+
+  gameOverSnd() {
+    const notes = [440, 370, 311, 261];
+    notes.forEach((f, i) => {
+      setTimeout(() => Sound._osc(f, 'sine', 0.35, 0.14), i * 180);
+    });
+  },
+
+  shopBuy() {
+    Sound._osc(800, 'square', 0.03, 0.08);
+    setTimeout(() => Sound._osc(1000, 'square', 0.03, 0.08), 35);
+    setTimeout(() => Sound._osc(1400, 'sine', 0.10, 0.12), 70);
+  },
+
+  uiClick() {
+    Sound._osc(900, 'sine', 0.03, 0.08);
+  },
+};
+
+/* --- ambient BGM (soft pad) ------------------------------------- */
+let _bgmNodes = null;
+
+function startBGM() {
+  if (_muted || _bgmNodes) return;
+  const ctx = getAudioCtx();
+  const g = ctx.createGain();
+  g.gain.value = 0.025;
+  g.connect(ctx.destination);
+
+  const freqs = [130.81, 196.00, 261.63]; // C3, G3, C4 soft pad
+  const oscs = freqs.map(f => {
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = f;
+    o.connect(g);
+    o.start();
+    return o;
+  });
+
+  // Slow LFO on gain for gentle pulse
+  const lfo = ctx.createOscillator();
+  lfo.type = 'sine';
+  lfo.frequency.value = 0.25;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 0.008;
+  lfo.connect(lfoGain);
+  lfoGain.connect(g.gain);
+  lfo.start();
+
+  _bgmNodes = { oscs, lfo, gain: g };
+}
+
+function stopBGM() {
+  if (!_bgmNodes) return;
+  const ctx = getAudioCtx();
+  _bgmNodes.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+  const nodes = _bgmNodes;
+  setTimeout(() => {
+    nodes.oscs.forEach(o => { try { o.stop(); } catch(e){} });
+    try { nodes.lfo.stop(); } catch(e){}
+  }, 350);
+  _bgmNodes = null;
+}
+
 const SIZE = 9;
 const BLOCK = 3;
 const HAND_SIZE = 5;
@@ -280,6 +444,7 @@ function renderHand() {
 
 function selectHand(idx) {
   S.selectedHand = S.selectedHand === idx ? -1 : idx;
+  Sound.select();
   renderHand();
   renderBoard(null, null);
 }
@@ -366,14 +531,17 @@ function placeNumber(r, c) {
   const sc = calcScore(num, r, c, clears);
 
   renderBoard(clearingCells.length > 0 ? clearingCells : null, [r, c]);
+  Sound.place(num);
   if (sc.total > 0) {
     S.score += sc.total;
     flashCalc(sc.chips, sc.totalMult, sc.total);
+    Sound.score();
   }
 
   // Perform clears after animation
   setTimeout(() => {
     if (clearingCells.length > 0) {
+      if (clears.length >= 2) Sound.crossClear(); else Sound.lineClear();
       const cleared = new Set(clearingCells.map(([r,c])=>`${r},${c}`));
       for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) {
         if (cleared.has(`${r},${c}`)) {
@@ -423,6 +591,7 @@ function checkGameOver() {
 // ============================================================
 function handleDiscard() {
   if (S.discards <= 0 || S.hand.length === 0) return;
+  Sound.discard();
   S.discards--;
   S.discard.push(...S.hand);
   S.hand = [];
@@ -492,6 +661,8 @@ function useItem(idx) {
 // ============================================================
 function roundClearManual() {
   if (!S.overrunning) return;
+  Sound.roundClear();
+  stopBGM();
   const interest = Math.min(Math.floor(S.money/5), 5);
   const total = S.reward + interest;
   S.money += total;
@@ -511,6 +682,7 @@ function roundClearManual() {
 }
 
 function overrunPenalty() {
+  stopBGM();
   const interest = Math.min(Math.floor(S.money/5), 5);
   const total = S.reward + interest;
   S.money += total;
@@ -531,6 +703,8 @@ function overrunPenalty() {
 }
 
 function gameOver(reason) {
+  Sound.gameOverSnd();
+  stopBGM();
   showScreen('gameover');
   document.getElementById('gameover-reason').textContent = reason;
   document.getElementById('gameover-stats').innerHTML = `
@@ -538,6 +712,8 @@ function gameOver(reason) {
     <div>スコア: ${S.score.toLocaleString()} / ${S.target.toLocaleString()}</div>`;
 }
 function showWin() {
+  stopBGM();
+  Sound.roundClear();
   showScreen('win');
   document.getElementById('win-stats').innerHTML = `
     <div>全 ${MAX_ANTE} ANTE クリア！</div>
@@ -568,7 +744,7 @@ function showBlindSelect() {
     const card = document.createElement('div');
     card.className = 'blind-card';
     card.innerHTML = `<div class="b-name">${t.name} BLIND</div><div class="b-target">${target.toLocaleString()}</div><div class="b-reward">報酬: $${t.reward}</div>`;
-    card.addEventListener('click', () => startPuzzle(i, target, t.reward));
+    card.addEventListener('click', () => { Sound.uiClick(); startPuzzle(i, target, t.reward); });
     container.appendChild(card);
   }
 }
@@ -594,6 +770,7 @@ function startPuzzle(blindIdx, target, reward) {
   drawHand();
 
   showScreen('puzzle');
+  startBGM();
   document.getElementById('goal-banner').classList.add('hidden');
   document.getElementById('calc-display').classList.add('hidden');
   document.getElementById('btn-round-clear').onclick = roundClearManual;
@@ -606,6 +783,7 @@ function startPuzzle(blindIdx, target, reward) {
 //  SHOP
 // ============================================================
 function showShop() {
+  stopBGM();
   showScreen('shop');
   document.getElementById('shop-money').textContent = `$${S.money}`;
   const container = document.getElementById('shop-items');
@@ -627,6 +805,7 @@ function showShop() {
     el.addEventListener('click',()=>{
       if (el.classList.contains('sold')) return;
       if (S.money<def.price) return;
+      Sound.shopBuy();
       if (cat==='artifact'){if(S.artifacts.length>=MAX_ARTIFACTS)return;S.artifacts.push({...def,scalingValue:def.scalingValue||0});}
       else{if(S.items.length>=MAX_ITEMS)return;S.items.push(def.id);}
       S.money-=def.price;el.classList.add('sold');el.querySelector('.si-price').textContent='SOLD';

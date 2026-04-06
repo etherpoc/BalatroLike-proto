@@ -2,6 +2,222 @@
 //  2048 × バラトロライク プロトタイプ v4
 // ============================================================
 
+// ============================================================
+//  SOUND SYSTEM (Web Audio API)
+// ============================================================
+const Sound = (() => {
+  let ctx = null;
+  let muted = false;
+
+  function ensure() {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  // Lazily init on first user interaction
+  function init() {
+    const handler = () => {
+      ensure();
+      document.removeEventListener('click', handler);
+      document.removeEventListener('keydown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+    document.addEventListener('click', handler);
+    document.addEventListener('keydown', handler);
+    document.addEventListener('touchstart', handler);
+  }
+
+  function osc(type, freq, startTime, endTime, gainVal, destination) {
+    const c = ensure();
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, startTime);
+    g.gain.setValueAtTime(gainVal, startTime);
+    g.gain.linearRampToValueAtTime(0, endTime);
+    o.connect(g);
+    g.connect(destination || c.destination);
+    o.start(startTime);
+    o.stop(endTime + 0.05);
+  }
+
+  function play(fn) {
+    if (muted || !ctx) return;
+    try { fn(ctx); } catch (e) { /* ignore audio errors */ }
+  }
+
+  // --- Sound effects ---
+
+  function slide() {
+    play(c => {
+      const now = c.currentTime;
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(300, now);
+      o.frequency.linearRampToValueAtTime(120, now + 0.08);
+      g.gain.setValueAtTime(0.06, now);
+      g.gain.linearRampToValueAtTime(0, now + 0.08);
+      o.connect(g); g.connect(c.destination);
+      o.start(now); o.stop(now + 0.1);
+    });
+  }
+
+  function merge() {
+    play(c => {
+      const now = c.currentTime;
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(400, now);
+      o.frequency.linearRampToValueAtTime(800, now + 0.07);
+      g.gain.setValueAtTime(0.12, now);
+      g.gain.linearRampToValueAtTime(0, now + 0.1);
+      o.connect(g); g.connect(c.destination);
+      o.start(now); o.stop(now + 0.12);
+    });
+  }
+
+  function score() {
+    play(c => {
+      const now = c.currentTime;
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(1200, now);
+      g.gain.setValueAtTime(0.08, now);
+      g.gain.linearRampToValueAtTime(0, now + 0.12);
+      o.connect(g); g.connect(c.destination);
+      o.start(now); o.stop(now + 0.15);
+    });
+  }
+
+  function combo(count) {
+    play(c => {
+      const now = c.currentTime;
+      const baseFreq = 500 + Math.min(count, 15) * 40;
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(baseFreq, now);
+      o.frequency.linearRampToValueAtTime(baseFreq + 200, now + 0.1);
+      g.gain.setValueAtTime(0.09, now);
+      g.gain.linearRampToValueAtTime(0, now + 0.12);
+      o.connect(g); g.connect(c.destination);
+      o.start(now); o.stop(now + 0.15);
+    });
+  }
+
+  function roundClear() {
+    play(c => {
+      const now = c.currentTime;
+      const notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
+      notes.forEach((freq, i) => {
+        osc('sine', freq, now + i * 0.1, now + i * 0.1 + 0.2, 0.1);
+      });
+    });
+  }
+
+  function win() {
+    play(c => {
+      const now = c.currentTime;
+      const notes = [523, 659, 784, 1047, 1319, 1568]; // ascending
+      notes.forEach((freq, i) => {
+        osc('sine', freq, now + i * 0.12, now + i * 0.12 + 0.25, 0.1);
+      });
+    });
+  }
+
+  function gameOver() {
+    play(c => {
+      const now = c.currentTime;
+      const notes = [440, 370, 311, 261]; // descending A4 F#4 D#4 C4
+      notes.forEach((freq, i) => {
+        osc('sine', freq, now + i * 0.2, now + i * 0.2 + 0.35, 0.1);
+      });
+    });
+  }
+
+  function shopBuy() {
+    play(c => {
+      const now = c.currentTime;
+      // ka-ching: two quick high notes
+      osc('square', 1500, now, now + 0.04, 0.06);
+      osc('square', 2000, now + 0.06, now + 0.12, 0.06);
+      osc('sine', 3000, now + 0.06, now + 0.18, 0.04);
+    });
+  }
+
+  function uiClick() {
+    play(c => {
+      const now = c.currentTime;
+      const o = c.createOscillator();
+      const g = c.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(800, now);
+      g.gain.setValueAtTime(0.05, now);
+      g.gain.linearRampToValueAtTime(0, now + 0.04);
+      o.connect(g); g.connect(c.destination);
+      o.start(now); o.stop(now + 0.06);
+    });
+  }
+
+  // --- BGM (ambient synth pad) ---
+  let bgmNodes = null;
+
+  function startBGM() {
+    if (muted || bgmNodes) return;
+    play(c => {
+      const now = c.currentTime;
+      const master = c.createGain();
+      master.gain.setValueAtTime(0, now);
+      master.gain.linearRampToValueAtTime(0.03, now + 1);
+      master.connect(c.destination);
+
+      const oscs = [];
+      // Low drone C2 + G2 + soft E3
+      const freqs = [65.41, 98.00, 164.81];
+      const types = ['sine', 'sine', 'triangle'];
+      freqs.forEach((freq, i) => {
+        const o = c.createOscillator();
+        const g = c.createGain();
+        o.type = types[i];
+        o.frequency.setValueAtTime(freq, now);
+        g.gain.setValueAtTime(i < 2 ? 0.5 : 0.25, now);
+        o.connect(g);
+        g.connect(master);
+        o.start(now);
+        oscs.push(o);
+      });
+
+      bgmNodes = { master, oscs };
+    });
+  }
+
+  function stopBGM() {
+    if (!bgmNodes || !ctx) return;
+    const now = ctx.currentTime;
+    bgmNodes.master.gain.linearRampToValueAtTime(0, now + 0.5);
+    const nodes = bgmNodes;
+    bgmNodes = null;
+    setTimeout(() => {
+      nodes.oscs.forEach(o => { try { o.stop(); } catch (e) {} });
+    }, 600);
+  }
+
+  return {
+    init, slide, merge, score, combo, roundClear, win, gameOver, shopBuy, uiClick,
+    startBGM, stopBGM,
+    get muted() { return muted; },
+    set muted(v) { muted = v; if (v) stopBGM(); },
+  };
+})();
+
+Sound.init();
+
 const SIZE = 4;
 const MAX_ANTE = 8;
 const MAX_ARTIFACTS = 5;
@@ -321,6 +537,7 @@ function updateCombo(hasMerge) {
       S.echoCombo = 0;
     }
     S.combo++;
+    Sound.combo(S.combo);
 
     // 高揚感: combo上昇ごとにラウンド中チップ+1
     const euphoria = getArtifact('euphoria');
@@ -533,6 +750,7 @@ function updateComboMeter() {
 }
 
 function flashCalc(chips, totalMult, total) {
+  Sound.score();
   const el = document.getElementById('calc-display');
   document.getElementById('calc-chips').textContent = chips;
   document.getElementById('calc-mult').textContent =
@@ -712,7 +930,7 @@ function showBlindSelect() {
       <div class="b-reward">報酬: $${t.reward}</div>
       <div class="b-boss">${t.isBoss ? boss.name + ' — ' + boss.desc : ''}</div>
     `;
-    card.addEventListener('click', () => startPuzzle(i, target, t.reward, t.isBoss ? boss : null));
+    card.addEventListener('click', () => { Sound.uiClick(); startPuzzle(i, target, t.reward, t.isBoss ? boss : null); });
     container.appendChild(card);
   }
 }
@@ -746,6 +964,7 @@ function startPuzzle(blindIdx, target, reward, boss) {
   }
 
   showScreen('puzzle');
+  Sound.startBGM();
 
   const banner = document.getElementById('boss-banner');
   if (boss) {
@@ -774,6 +993,9 @@ function handleMove(dir) {
 
   S.grid = result.grid;
   const hasMerge = result.mergeEvents.length > 0;
+
+  Sound.slide();
+  if (hasMerge) Sound.merge();
 
   // Update combo BEFORE score calc so combo is current
   updateCombo(hasMerge);
@@ -824,6 +1046,8 @@ function handleMove(dir) {
 //  ROUND END / GAME OVER
 // ============================================================
 function roundClear() {
+  Sound.stopBGM();
+  Sound.roundClear();
   const interest = Math.min(Math.floor(S.money / 5), 5);
   const goldBonus = countGoldTiles() * 3;
   const total = S.reward + interest + goldBonus;
@@ -848,7 +1072,7 @@ function roundClear() {
   el.innerHTML = html;
 
   showScreen('result');
-  document.getElementById('btn-to-shop').addEventListener('click', advanceBlind);
+  document.getElementById('btn-to-shop').addEventListener('click', () => { Sound.uiClick(); advanceBlind(); });
 }
 
 function advanceBlind() {
@@ -862,6 +1086,8 @@ function advanceBlind() {
 }
 
 function gameOver(reason) {
+  Sound.stopBGM();
+  Sound.gameOver();
   showScreen('gameover');
   document.getElementById('gameover-reason').textContent = reason;
   document.getElementById('gameover-stats').innerHTML = `
@@ -872,6 +1098,8 @@ function gameOver(reason) {
 }
 
 function showWin() {
+  Sound.stopBGM();
+  Sound.win();
   showScreen('win');
   document.getElementById('win-stats').innerHTML = `
     <div>全 ${MAX_ANTE} ANTE クリア！</div>
@@ -926,6 +1154,7 @@ function showShop() {
       }
 
       S.money -= def.price;
+      Sound.shopBuy();
       el.classList.add('sold');
       el.querySelector('.si-price').textContent = 'SOLD';
       document.getElementById('shop-money').textContent = `$${S.money}`;
@@ -991,10 +1220,10 @@ function initGame() {
   S.dirMerged = { left: false, right: false, up: false, down: false };
 }
 
-document.getElementById('btn-start').addEventListener('click', () => { initGame(); showBlindSelect(); });
-document.getElementById('btn-next-round').addEventListener('click', showBlindSelect);
-document.getElementById('btn-retry').addEventListener('click', () => { initGame(); showBlindSelect(); });
-document.getElementById('btn-win-retry').addEventListener('click', () => { initGame(); showBlindSelect(); });
+document.getElementById('btn-start').addEventListener('click', () => { Sound.uiClick(); initGame(); showBlindSelect(); });
+document.getElementById('btn-next-round').addEventListener('click', () => { Sound.uiClick(); showBlindSelect(); });
+document.getElementById('btn-retry').addEventListener('click', () => { Sound.uiClick(); initGame(); showBlindSelect(); });
+document.getElementById('btn-win-retry').addEventListener('click', () => { Sound.uiClick(); initGame(); showBlindSelect(); });
 
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
