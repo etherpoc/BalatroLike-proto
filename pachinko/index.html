@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>パチンコ × バラトロライク</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div id="screen-title" class="screen active">
+      <h1>PACHI<span class="accent">NKO</span></h1>
+      <p class="subtitle">パチンコ × バラトロライク</p>
+      <button id="btn-start" class="btn">RUN 開始</button>
+      <a href="https://github.com/etherpoc/BalatroLike-proto/blob/main/pachinko/README.md" target="_blank" class="title-link">README / 仕様書</a>
+    </div>
+
+    <div id="screen-blind" class="screen">
+      <h2>BLIND 選択</h2>
+      <div id="ante-display" class="ante-label"></div>
+      <div id="blind-cards" class="blind-cards"></div>
+    </div>
+
+    <div id="screen-puzzle" class="screen">
+      <div class="puzzle-layout">
+        <a href="https://github.com/etherpoc/BalatroLike-proto/blob/main/pachinko/README.md" target="_blank" class="spec-link">Spec on GitHub</a>
+        <div class="top-area">
+          <div class="status-pane">
+            <div class="stat-row">
+              <div class="stat-block"><div class="stat-label">TARGET</div><div id="ui-target" class="stat-value accent">0</div></div>
+              <div class="stat-block"><div class="stat-label">CURRENT</div><div id="ui-score" class="stat-value accent">0</div></div>
+              <div class="stat-block small"><div class="stat-label">MONEY</div><div id="ui-money" class="stat-value accent">$0</div></div>
+            </div>
+            <div id="goal-banner" class="goal-banner hidden">
+              <div class="goal-text">GOAL REACHED!</div>
+              <button id="btn-round-clear" class="btn btn-clear">ROUND CLEAR（精算）</button>
+            </div>
+            <div class="stat-row">
+              <div class="stat-block small"><div class="stat-label">BALLS</div><div id="ui-balls" class="stat-value">0</div></div>
+            </div>
+            <div id="calc-display" class="calc-display">
+              <span class="calc-label">CHIPS</span><span id="calc-chips" class="calc-chips">0</span>
+              <span class="calc-x">&times;</span>
+              <span class="calc-label">MULT</span><span id="calc-mult" class="calc-mult">0</span>
+              <span class="calc-eq">=</span>
+              <span id="calc-result" class="calc-result">0</span>
+            </div>
+            <div id="drop-hint" class="drop-hint">盤面上部をクリックしてボールを投下</div>
+          </div>
+          <div class="right-info">
+            <div class="info-col"><div class="stat-label">ARTIFACTS</div><div id="ui-artifacts" class="slot-list"></div></div>
+            <div class="info-col"><div class="stat-label">ITEMS</div><div id="ui-items" class="slot-list"></div></div>
+          </div>
+        </div>
+        <div class="bottom-area">
+          <canvas id="board-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-result" class="screen"><div id="result-content"></div></div>
+
+    <div id="screen-shop" class="screen">
+      <h2>SHOP</h2>
+      <div class="shop-money">所持金: <span id="shop-money">$0</span></div>
+      <div id="shop-items" class="shop-items"></div>
+      <button id="btn-next-round" class="btn">次のラウンドへ</button>
+    </div>
+
+    <div id="screen-gameover" class="screen">
+      <h2 class="fail-text">GAME OVER</h2>
+      <p id="gameover-reason"></p>
+      <div id="gameover-stats" class="end-stats"></div>
+      <button id="btn-retry" class="btn">リトライ</button>
+    </div>
+
+    <div id="screen-win" class="screen">
+      <h2 class="accent">CONGRATULATIONS</h2>
+      <p>全ステージクリア！</p>
+      <div id="win-stats" class="end-stats"></div>
+      <button id="btn-win-retry" class="btn">もう一度遊ぶ</button>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
